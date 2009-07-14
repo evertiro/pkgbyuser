@@ -104,8 +104,12 @@ allpackages(){
 	while read line; do
 		wget -nv aur.archlinux.org/packages/$line/$line.tar.gz || return 1
 	done < /tmp/pkgbyuser
-	echo
-	echo -e "\e[1;32m==>\e[1;37m Download completed successfully!"
+	if [[ -s /tmp/pkgbyuser ]]; then
+		echo -e "\e[1;32m==>\e[1;37m Download completed successfully!"
+	else
+		echo -e "\e[1;32m==>\e[1;37m Download queue empty. Exiting."
+		exit 0
+	fi
 
 	if [ -z $OPT ]; then
 		exit 0
