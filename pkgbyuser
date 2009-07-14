@@ -1,0 +1,199 @@
+#!/bin/bash
+#
+# pkgbyuser - a simple script to download all packages by a user
+# Copyright (C) 2009 Daniel J Griffiths <ghost1227@archlinux.us>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301, USA.
+
+if [ -f /tmp/pkgbyuser ]; then
+	rm -f /tmp/pkgbyuser
+fi
+
+##########################
+### USAGE FUNCTION     ###
+##########################
+usage(){
+	echo "Usage: pkgbyuser [option] [username]"
+	echo
+	echo "Options:"
+	echo "   -e, --extract	extract some (or all) of the downloaded packages"
+	echo "   -ec, --clean		same as -e but removes extracted archives"
+}
+
+##########################
+### GET FUNCTION       ###
+##########################
+get(){
+	TOTAL=`wget -q -O - "http://aur.archlinux.org/packages.php?O=0&K=$UNAME&do_Search=Go&detail=1&L=2&C=0&SeB=m&SB=n&SO=a&PP=100" | grep "Showing results" | awk -F " " '{ print $7 }'`
+
+if [ -z $TOTAL ]; then
+	echo -e "\e[1;31m==>\e[1;37m User '$UNAME' does not exist!"
+	exit 0
+fi
+
+	OFFSET=0
+	while [ $OFFSET -lt $TOTAL ]; do
+		wget -q -O - "http://aur.archlinux.org/packages.php?O=$OFFSET&K=$UNAME&do_Search=Go&detail=1&L=2&C=0&SeB=m&SB=n&SO=a&PP=100" | grep "class='f4'" | awk -F ">" '{ print $5 }' | awk '{ print $1 }' | sed -e '/^$/d' >> /tmp/pkgbyuser
+		let OFFSET=OFFSET+100
+	done
+
+	echo -e "\e[1;33m==>\e[1;37m $TOTAL packages found for user '$UNAME' in [unsupported]."
+	echo -en "\e[1;33m==>\e[1;37m Download all (Y/n)? "
+	read
+	case $REPLY in
+		n*|N*)
+		selpackages
+		;;
+		y*|Y*|*)
+		allpackages
+		;;
+	esac
+
+	exit 0
+}
+
+##########################
+### SEL FUNCTION       ###
+##########################
+selpackages(){
+	if [ -z $EDITOR ]; then
+		echo -e "\e[1;33m==>\e[1;37m Please select your preferred editor."
+		echo -en "\e[1;33m==>\e[1;37m (v)i -or- (n)ano "
+		read
+		case $REPLY in
+			v*|V*)
+			EDITOR=vi
+			;;
+			n*|N*)
+			EDITOR=nano
+			;;
+			*)
+			echo -e "\e[1;31m==>\e[1;37m Invalid response! Please try again."
+			selpackages
+			;;
+		esac
+	fi
+	$EDITOR /tmp/pkgbyuser
+	allpackages
+}
+
+##########################
+### ALL FUNCTION       ###
+##########################
+allpackages(){
+	while read line; do
+		wget -nv aur.archlinux.org/packages/$line/$line.tar.gz || return 1
+	done < /tmp/pkgbyuser
+	echo
+	echo -e "\e[1;32m==>\e[1;37m Download completed successfully!"
+
+	if [ -z $OPT ]; then
+		exit 0
+	else
+		extract
+	fi
+}
+
+##########################
+### EXTRACT FUNCTION   ###
+##########################
+extract(){
+	echo -en "\e[1;33m==>\e[1;37m Extract all (Y/n)? "
+	read
+	case $REPLY in
+		n*|N*)
+		exsome
+		;;
+		y*|Y*|*)
+		exall
+		;;
+	esac
+
+	exit 0
+}
+
+##########################
+### EXSOME FUNCTION    ###
+##########################
+exsome(){
+	if [ -z $EDITOR ]; then
+		echo -e "\e[1;33m==>\e[1;37m Please select your preferred editor."
+		echo -en "\e[1;33m==>\e[1;37m (v)i -or- (n)ano "
+		read
+		case $REPLY in
+			v*|V*)
+			EDITOR=vi
+			;;
+			n*|N*)
+			EDITOR=nano
+			;;
+			*)
+			echo -e "\e[1;31m==>\e[1;37m Invalid response! Please try again."
+			exsome
+			;;
+		esac
+	fi
+	$EDITOR /tmp/pkgbyuser
+	exall
+}
+
+##########################
+### EXALL FUNCTION     ###
+##########################
+exall(){
+	while read line; do
+		bsdtar -x -f $line.tar.gz || return 1
+	done < /tmp/pkgbyuser
+	echo
+	echo -e "\e[1;32m==>\e[1;37m Extraction completed successfully!"
+
+	if [ "$OPT" == "ec" ]; then
+		echo -e "\e[1;34m==>\e[1;37m Cleaning up..."
+		while read line; do
+			rm -f $line.tar.gz
+		done < /tmp/pkgbyuser
+		echo -e "\e[1;32m==>\e[1;37m Cleanup completed successfully!"
+	fi
+
+	exit 0
+}
+
+##########################
+### GET RUNTIME ARGS   ###
+##########################
+
+case $1 in
+	'')
+	usage
+	;;
+	'-e'|'--extract')
+	OPT=e
+	UNAME=$2
+	get
+	;;
+	'-ec'|'--clean')
+	OPT=ec
+	UNAME=$2
+	get
+	;;
+	*)
+	UNAME=$1
+	get
+	;;
+esac
+
+exit 0
+
