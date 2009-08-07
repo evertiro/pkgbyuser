@@ -63,7 +63,7 @@ else
 	done
 fi
 
-	if [ $OPT = "l" ]; then
+	if [ "$OPT" = "l" ]; then
 		list
 	fi
 
